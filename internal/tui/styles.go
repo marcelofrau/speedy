@@ -197,6 +197,40 @@ var (
 			Bold(true).
 			Foreground(lipgloss.Color(colorNeonOrange))
 
+	// Results screen — 2-column summary
+	StyleResultsGradeLetter = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(lipgloss.Color(colorNeonPink))
+
+	StyleResultsGradeDesc = lipgloss.NewStyle().
+				Foreground(lipgloss.Color(colorTextDim)).
+				Italic(true)
+
+	StyleTableHeader = lipgloss.NewStyle().
+				Foreground(lipgloss.Color(colorMuted))
+
+	StyleTableOK = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color(colorNeonGreen))
+
+	StyleTableWarn = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color(colorNeonOrange))
+
+	StyleTableFail = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color(colorNeonPink))
+
+	StyleResultsColLeft = lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(lipgloss.Color(colorBorder)).
+				Padding(1, 2)
+
+	StyleResultsColRight = lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(lipgloss.Color(colorNeonPurple)).
+				Padding(1, 2)
+
 	// Wait-for-keypress screen
 	StyleWaitKey = lipgloss.NewStyle().
 			Bold(true).

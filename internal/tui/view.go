@@ -326,12 +326,15 @@ func (m Model) renderBloatDownloadPanel() string {
 		spark = renderSparklineMultiRowEmpty(arcWidth, sparkRows)
 	}
 
-	gradeStr := ""
+	// Grade on its own line to avoid heading overflow
+	rows := []string{heading, "", baselineLine, currentLine, ""}
 	if (m.phase == PhaseDone || m.phase == PhaseWaitKey) && m.bloatResult.DLGrade != "" {
-		gradeStr = "  " + renderGradeBadge(m.bloatResult.DLGrade)
+		rows = append(rows, "Grade  "+renderGradeBadge(m.bloatResult.DLGrade))
+		rows = append(rows, "")
 	}
+	rows = append(rows, spark)
 
-	content := strings.Join([]string{heading + gradeStr, "", baselineLine, currentLine, "", spark}, "\n")
+	content := strings.Join(rows, "\n")
 	return style.Width(panelWidth).Render(content)
 }
 
@@ -359,12 +362,14 @@ func (m Model) renderBloatUploadPanel() string {
 		spark = renderSparklineMultiRowEmpty(arcWidth, sparkRows)
 	}
 
-	gradeStr := ""
+	rows := []string{heading, "", baselineLine, currentLine, ""}
 	if (m.phase == PhaseDone || m.phase == PhaseWaitKey) && m.bloatResult.ULGrade != "" {
-		gradeStr = "  " + renderGradeBadge(m.bloatResult.ULGrade)
+		rows = append(rows, "Grade  "+renderGradeBadge(m.bloatResult.ULGrade))
+		rows = append(rows, "")
 	}
+	rows = append(rows, spark)
 
-	content := strings.Join([]string{heading + gradeStr, "", baselineLine, currentLine, "", spark}, "\n")
+	content := strings.Join(rows, "\n")
 	return style.Width(panelWidth).Render(content)
 }
 
@@ -428,54 +433,211 @@ func fmtElapsed(d time.Duration) string {
 
 // ── Results block ─────────────────────────────────────────────────────────────
 
+// ── Results block ─────────────────────────────────────────────────────────────
+
+// gradeRank maps letter grades to a numeric rank (lower = better).
+var gradeRank = map[string]int{
+	"A+": 0, "A": 1, "B": 2, "C": 3, "D": 4, "F": 5,
+}
+
+// gradeDesc returns a short description for a given overall grade.
+func gradeDesc(grade string) string {
+	switch grade {
+	case "A+":
+		return "Latency is excellent under load.\nIdeal for all real-time applications."
+	case "A":
+		return "Latency increased slightly under load.\nMost applications will work great."
+	case "B":
+		return "Noticeable latency increase under load.\nSome real-time apps may be affected."
+	case "C":
+		return "Significant bufferbloat detected.\nVideo calls and gaming will suffer."
+	case "D":
+		return "Severe bufferbloat detected.\nReal-time apps will be heavily degraded."
+	default:
+		return "Extreme bufferbloat detected.\nYour connection is impaired under load."
+	}
+}
+
+// activityStatus returns the display icon + style for an activity
+// given the overall grade rank.
+func activityStatus(overallRank, minRank int) string {
+	switch {
+	case overallRank <= minRank:
+		return StyleTableOK.Render("✓")
+	case overallRank == minRank+1:
+		return StyleTableWarn.Render("⚠")
+	default:
+		return StyleTableFail.Render("✗")
+	}
+}
+
 func (m Model) renderResultsBlock() string {
+	// Column width: split available width in two, minus gap and outer margin
+	colW := (m.width - 4 - 2 - 4) / 2 // 4 outer margin, 2 border, 4 gap
+	if colW < 30 {
+		colW = 30
+	}
+
+	left := m.renderSpeedCol(colW)
+	right := m.renderBloatSummaryCol(colW)
+
+	cols := lipgloss.JoinHorizontal(lipgloss.Top, left, "  ", right)
+	return cols + "\n\n  " + StyleHint.Render("Press q to quit.")
+}
+
+// renderSpeedCol renders the left results column: speed metrics + sparklines.
+func (m Model) renderSpeedCol(w int) string {
 	r := m.speedResult
 	br := m.bloatResult
+	innerW := w - 6 // border (2) + padding (2*2=4)
+
+	sec := func(title string) string {
+		return StyleResultsTitle.Render(title) + "\n" +
+			StyleDim.Render(strings.Repeat("─", innerW))
+	}
 
 	row := func(k, v string, vs lipgloss.Style) string {
 		return StyleResultKey.Render(k) + vs.Render(v)
 	}
 
-	speedTitle := StyleResultsTitle.Width(54).Render("SPEED TEST")
-	sdiv := StyleDim.Render(strings.Repeat("─", 54))
+	speedSec := sec("SPEED TEST")
 	pingRow := row("Ping", fmt.Sprintf("%.0f ms", r.PingMs), StyleSpeedPing) +
-		"   " + StyleResultKey.Render("Jitter") + StyleSpeedPing.Render(fmt.Sprintf("%.0f ms", r.JitterMs))
-	dlRow := row("Download", fmt.Sprintf("%.1f Mbps", r.DownloadMbps), StyleSpeedDown) +
-		"   " + StyleResultKey.Render("Upload") + StyleSpeedUp.Render(fmt.Sprintf("%.1f Mbps", r.UploadMbps))
-	serverRow := row("Server", r.ServerName+", "+r.Country+" ("+r.Sponsor+")", StyleResultVal)
-	ipRow := row("IP", r.IP, StyleResultVal) +
-		"   " + StyleResultKey.Render("ISP") + StyleResultVal.Render(r.ISP)
+		"  " + StyleResultKey.Render("Jitter") + StyleSpeedPing.Render(fmt.Sprintf("%.0f ms", r.JitterMs))
+	dlRow := StyleSectionDown.Render("↓") + "  " +
+		StyleSpeedDown.Render(fmt.Sprintf("%.1f", r.DownloadMbps)) + " " + StyleUnit.Render("Mbps")
+	ulRow := StyleSectionUp.Render("↑") + "  " +
+		StyleSpeedUp.Render(fmt.Sprintf("%.1f", r.UploadMbps)) + " " + StyleUnit.Render("Mbps")
 
-	bloatTitle := StyleResultsTitle.Width(54).Render("BUFFERBLOAT")
-	bdiv := StyleDim.Render(strings.Repeat("─", 54))
-	baselineRow := row("Baseline", fmt.Sprintf("%.0f ms  idle", br.BaselineMs), StyleSpeedPing)
-	dlBloatRow := StyleResultKey.Render("Download") +
-		renderGradeBadge(br.DLGrade) +
-		StyleMuted.Render(fmt.Sprintf("  peak %.0f ms  (+%.0f ms)", br.DLPeakMs, br.DLDegradationMs))
-	ulBloatRow := StyleResultKey.Render("Upload") +
-		renderGradeBadge(br.ULGrade) +
-		StyleMuted.Render(fmt.Sprintf("  peak %.0f ms  (+%.0f ms)", br.ULPeakMs, br.ULDegradationMs))
-	overallRow := StyleResultKey.Render("Overall") + renderGradeBadge(br.OverallGrade)
-	dlSpark := StyleMuted.Render("dl ping  ") +
-		renderLatencySparklineMultiRow(m.bloatDLHistory, 32, 2, bb.GradeColor(br.DLGrade))
-	ulSpark := StyleMuted.Render("ul ping  ") +
-		renderLatencySparklineMultiRow(m.bloatULHistory, 32, 2, bb.GradeColor(br.ULGrade))
-	total := row("Completed", time.Since(m.startTime).Round(time.Second).String(), StyleDim)
+	connSec := sec("CONNECTION")
+	serverRow := row("Server", r.ServerName+", "+r.Country, StyleResultVal)
+	sponsorRow := row("Sponsor", r.Sponsor, StyleResultVal)
+	ipRow := row("IP", r.IP, StyleResultVal)
+	ispRow := row("ISP", r.ISP, StyleResultVal)
+
+	sparkSec := sec("LATENCY HISTORY")
+	sparkW := innerW - 10
+	if sparkW < 8 {
+		sparkW = 8
+	}
+	dlSpark := StyleMuted.Render("dl load  ") +
+		renderLatencySparklineMultiRow(m.bloatDLHistory, sparkW, 2, bb.GradeColor(br.DLGrade))
+	ulSpark := StyleMuted.Render("ul load  ") +
+		renderLatencySparklineMultiRow(m.bloatULHistory, sparkW, 2, bb.GradeColor(br.ULGrade))
+
+	elapsed := time.Since(m.startTime).Round(time.Second)
+	totalRow := StyleDim.Render("Completed in  ") + StyleResultVal.Render(elapsed.String())
 
 	content := strings.Join([]string{
-		speedTitle, sdiv, "",
-		pingRow, dlRow, "",
-		serverRow, ipRow, "",
-		bloatTitle, bdiv, "",
-		baselineRow, "",
-		dlBloatRow, dlSpark, "",
-		ulBloatRow, ulSpark, "",
-		overallRow, "",
-		total,
+		speedSec, "",
+		pingRow,
+		dlRow,
+		ulRow,
+		"",
+		connSec, "",
+		serverRow,
+		sponsorRow,
+		ipRow,
+		ispRow,
+		"",
+		sparkSec, "",
+		dlSpark,
+		ulSpark,
+		"",
+		totalRow,
 	}, "\n")
 
-	box := StyleResultsBox.Width(m.width - 4).Render(content)
-	return box + "\n\n  " + StyleHint.Render("Press q to quit.")
+	return StyleResultsColLeft.Width(w).Render(content)
+}
+
+// renderBloatSummaryCol renders the right results column: bufferbloat summary.
+func (m Model) renderBloatSummaryCol(w int) string {
+	br := m.bloatResult
+	innerW := w - 6
+
+	sec := func(title string) string {
+		return StyleResultsTitle.Render(title) + "\n" +
+			StyleDim.Render(strings.Repeat("─", innerW))
+	}
+
+	// ── Grade section ──
+	gradeSec := sec("BUFFERBLOAT GRADE")
+	gradeColor := bb.GradeColor(br.OverallGrade)
+	gradeBadgeLine := "  " + renderGradeBadge(br.OverallGrade) + "  " +
+		lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(gradeColor)).Render(br.OverallGrade)
+	desc := gradeDesc(br.OverallGrade)
+	var descLines []string
+	for _, l := range strings.Split(desc, "\n") {
+		descLines = append(descLines, StyleResultsGradeDesc.Render(l))
+	}
+
+	// ── Latency section ──
+	latSec := sec("LATENCY")
+	unloadedRow := StyleResultKey.Render("Unloaded") +
+		StyleSpeedPing.Render(fmt.Sprintf("%.0f ms", br.BaselineMs))
+	dlLatRow := StyleResultKey.Render("Under DL") +
+		lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(bb.GradeColor(br.DLGrade))).
+			Render(fmt.Sprintf("+%.0f ms", br.DLDegradationMs)) +
+		"  " + StyleDim.Render("["+br.DLGrade+"]")
+	ulLatRow := StyleResultKey.Render("Under UL") +
+		lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(bb.GradeColor(br.ULGrade))).
+			Render(fmt.Sprintf("+%.0f ms", br.ULDegradationMs)) +
+		"  " + StyleDim.Render("["+br.ULGrade+"]")
+
+	// ── Your Connection table ──
+	connSec := sec("YOUR CONNECTION")
+
+	type activity struct {
+		name    string
+		minRank int // max grade rank that still works (0=A+…5=F)
+	}
+	activities := []activity{
+		{"Web Browsing", 4},
+		{"Audio Calls", 3},
+		{"4K Streaming", 2},
+		{"Video Conf.", 2},
+		{"Low-lat. Gaming", 1},
+	}
+
+	overallRank := gradeRank[br.OverallGrade]
+
+	header := StyleTableHeader.Render(fmt.Sprintf("  %-20s  %-6s  %-6s",
+		"", "Ideal", "Now"))
+	dividerRow := StyleDim.Render(strings.Repeat("─", innerW))
+
+	var actRows []string
+	for _, a := range activities {
+		idealIcon := StyleTableOK.Render("✓")
+		nowIcon := activityStatus(overallRank, a.minRank)
+		actRows = append(actRows,
+			fmt.Sprintf("  %-20s  %-6s  %-6s",
+				StyleMuted.Render(a.name), idealIcon, nowIcon))
+	}
+
+	// ── Overall ──
+	overallLine := StyleResultKey.Render("Overall") + renderGradeBadge(br.OverallGrade)
+
+	rows := []string{
+		gradeSec, "",
+		gradeBadgeLine,
+	}
+	rows = append(rows, descLines...)
+	rows = append(rows, "",
+		latSec, "",
+		unloadedRow,
+		dlLatRow,
+		ulLatRow,
+		"",
+		connSec, "",
+		header,
+		dividerRow,
+	)
+	rows = append(rows, actRows...)
+	rows = append(rows, "",
+		overallLine,
+	)
+
+	content := strings.Join(rows, "\n")
+	return StyleResultsColRight.Width(w).Render(content)
 }
 
 // ── Error screen ──────────────────────────────────────────────────────────────

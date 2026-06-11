@@ -33,7 +33,8 @@ const (
 	sparklineLen   = 30
 	bloatLen       = 50
 	panelWidth     = 38
-	arcWidth       = 34
+	// arcWidth must equal panelWidth minus border (2) minus padding (2*2=4) = 32
+	arcWidth       = 32
 	sparkRows      = 4  // height in terminal lines of each multi-row sparkline
 	logVisibleRows = 12 // fallback visible lines when log is rendered below panels
 	logMinWidth    = 28 // minimum log panel width before hiding it
