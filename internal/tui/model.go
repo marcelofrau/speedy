@@ -176,14 +176,14 @@ func appendLog(log []ev.MsgLog, entry ev.MsgLog, startTime time.Time, cap int) [
 }
 
 // computePanelWidth returns the per-panel width for the live testing screen.
-// On wide terminals it uses an 80/20 panels/log split; on narrow it falls back
+// On wide terminals it uses a 60/40 panels/log split; on narrow it falls back
 // to the static panelWidth constant.
 func (m Model) computePanelWidth() int {
 	if m.width < wideThreshold {
 		return panelWidth
 	}
 	avail := m.width - 4
-	panelsTotal := avail * 80 / 100
+	panelsTotal := avail * 60 / 100
 	pw := (panelsTotal - 2) / 2
 	if pw < 30 {
 		pw = 30

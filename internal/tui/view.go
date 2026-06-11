@@ -40,7 +40,7 @@ func (m Model) View() string {
 
 // renderMainArea renders the 4 metric panels + activity log.
 // Wide terminals (≥wideThreshold): log goes to the right of the stacked panels
-// with an 80/20 split (panels get 80%, log gets 20%).
+// with a 60/40 split (panels get 60%, log gets 40%).
 // Narrow terminals (<wideThreshold): just the 4 panels; log is omitted (stepper
 // and status bar already provide live feedback).
 func (m Model) renderMainArea() string {
@@ -53,9 +53,9 @@ func (m Model) renderMainArea() string {
 		return leftCol
 	}
 
-	// Wide: split available space — panels get 80%, log gets 20%
+	// Wide: split available space — panels get 60%, log gets 40%
 	avail := m.width - 4 // reserve 4 chars for the inter-column gap
-	panelsTotal := avail * 80 / 100
+	panelsTotal := avail * 60 / 100
 	logW := avail - panelsTotal
 
 	if logW < logMinWidth {
@@ -744,12 +744,13 @@ func renderSparklineMultiRow(history []float64, width, rows int, fillColor strin
 }
 
 func renderLatencySparklineMultiRow(history []float64, width, rows int, fillColor string) string {
-	maxVal := maxSlice(history)
+	data := padOrTrim(history, width)
+	maxVal := maxSlice(data)
 	if maxVal == 0 {
 		maxVal = 1
 	}
-	normalized := make([]float64, len(history))
-	for i, v := range history {
+	normalized := make([]float64, len(data))
+	for i, v := range data {
 		normalized[i] = v / maxVal
 	}
 	return buildMultiRowSpark(normalized, width, rows,
@@ -879,6 +880,17 @@ func renderGradeBadge(grade string) string {
 		Background(lipgloss.Color(color)).
 		Padding(0, 1).
 		Render(grade)
+}
+
+func padOrTrim(data []float64, width int) []float64 {
+	if len(data) < width {
+		padded := make([]float64, width-len(data))
+		return append(padded, data...)
+	}
+	if len(data) > width {
+		return data[len(data)-width:]
+	}
+	return data
 }
 
 func clampIdx(idx, max int) int {
