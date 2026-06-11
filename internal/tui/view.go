@@ -255,6 +255,10 @@ func (m Model) renderSpeedRow(pw int) string {
 
 func (m Model) renderDownloadPanel(pw int) string {
 	aw := pw - 6 // inner width = panelWidth - border(2) - padding(4)
+	sw := aw
+	if sw > sparklineLen {
+		sw = sparklineLen
+	}
 	active := m.phase == PhaseDownload
 	done := phaseIn(m.phase, steps[2].done)
 	style := StylePanel
@@ -270,12 +274,12 @@ func (m Model) renderDownloadPanel(pw int) string {
 		arcBar = renderArc(m.dlPercent, aw, colorNeonBlue, colorMuted)
 		m.dlProgress.Width = aw
 		gauge = m.dlProgress.View()
-		spark = renderSparklineMultiRow(m.dlHistory, aw, sparkRows, colorNeonBlue)
+		spark = renderSparklineMultiRow(m.dlHistory, sw, sparkRows, colorNeonBlue)
 	} else {
 		speed = StylePlaceholder.Render("— Mbps")
 		arcBar = renderArcEmpty(aw, colorMuted)
 		gauge = renderEmptyBar(aw)
-		spark = renderSparklineMultiRowEmpty(aw, sparkRows)
+		spark = renderSparklineMultiRowEmpty(sw, sparkRows)
 	}
 
 	content := strings.Join([]string{heading, "", arcBar, speed, "", gauge, "", spark}, "\n")
@@ -284,6 +288,10 @@ func (m Model) renderDownloadPanel(pw int) string {
 
 func (m Model) renderUploadPanel(pw int) string {
 	aw := pw - 6
+	sw := aw
+	if sw > sparklineLen {
+		sw = sparklineLen
+	}
 	active := m.phase == PhaseUpload
 	done := phaseIn(m.phase, steps[3].done)
 	style := StylePanel
@@ -299,12 +307,12 @@ func (m Model) renderUploadPanel(pw int) string {
 		arcBar = renderArc(m.ulPercent, aw, colorNeonGreen, colorMuted)
 		m.ulProgress.Width = aw
 		gauge = m.ulProgress.View()
-		spark = renderSparklineMultiRow(m.ulHistory, aw, sparkRows, colorNeonGreen)
+		spark = renderSparklineMultiRow(m.ulHistory, sw, sparkRows, colorNeonGreen)
 	} else {
 		speed = StylePlaceholder.Render("— Mbps")
 		arcBar = renderArcEmpty(aw, colorMuted)
 		gauge = renderEmptyBar(aw)
-		spark = renderSparklineMultiRowEmpty(aw, sparkRows)
+		spark = renderSparklineMultiRowEmpty(sw, sparkRows)
 	}
 
 	content := strings.Join([]string{heading, "", arcBar, speed, "", gauge, "", spark}, "\n")
@@ -633,7 +641,7 @@ func (m Model) renderBloatSummaryCol(w int) string {
 			Render(fmt.Sprintf("+%.0f ms", br.ULDegradationMs)) +
 		"  " + StyleDim.Render("["+br.ULGrade+"]")
 
-	// ── Your Connection table with borders ──
+	// ── Your Connection table — horizontal separators + odd/even rows ──
 	connSec := sec("YOUR CONNECTION")
 
 	type activity struct {
@@ -650,60 +658,48 @@ func (m Model) renderBloatSummaryCol(w int) string {
 
 	overallRank := gradeRank[br.OverallGrade]
 
-	// Column widths — nameW is dynamic so table fits innerW exactly
-	// table total = nameW + 2 idealW + 3 separators (│) + 2 outer (│) = nameW + 2*idealW + 5
+	// Column widths — no borders, just ANSI-aware padding
 	idealW := 7
-	nameW := innerW - 2*idealW - 5
+	nameW := innerW - 2*idealW
 	if nameW < 12 {
 		nameW = 12
 	}
 
-	// border chars
-	h, v := "─", "│"
-	tl, tm, tr := "┌", "┬", "┐"
-	ml, mm, mr := "├", "┼", "┤"
-	bl, bm, br2 := "└", "┴", "┘"
-	dim := func(s string) string { return StyleDim.Render(s) }
+	divider := StyleDim.Render(strings.Repeat("─", innerW))
 
-	hName := strings.Repeat(h, nameW+2)
-	hIdeal := strings.Repeat(h, idealW+2)
-	hNow := strings.Repeat(h, idealW+2)
+	// Header row
+	headerRow := "  " +
+		StyleTableHeader.Width(nameW).Render("") +
+		StyleTableHeader.Width(idealW).Render("Ideal") +
+		StyleTableHeader.Width(idealW).Render("Now")
 
-	topBorder := dim(tl + hName + tm + hIdeal + tm + hNow + tr)
-	midBorder := dim(ml + hName + mm + hIdeal + mm + hNow + mr)
-	botBorder := dim(bl + hName + bm + hIdeal + bm + hNow + br2)
-
-	cell := func(s string, cw int) string {
-		return " " + lipgloss.NewStyle().Width(cw).Render(s) + " "
-	}
-	dv := dim(v)
-
-	headerRow := dv + cell(StyleTableHeader.Render(""), nameW) +
-		dv + cell(StyleTableHeader.Render("Ideal"), idealW) +
-		dv + cell(StyleTableHeader.Render("Now"), idealW) + dv
+	// Odd/even styles
+	styleEven := StyleMuted
+	styleOdd := StyleDim
 
 	var actRows []string
-	for _, a := range activities {
+	for i, a := range activities {
 		idealIcon := StyleTableOK.Render("✓")
 		nowIcon := activityStatus(overallRank, a.minRank)
+		nameStyle := styleEven
+		if i%2 == 1 {
+			nameStyle = styleOdd
+		}
 		actRows = append(actRows,
-			dv+cell(StyleMuted.Render(a.name), nameW)+
-				dv+cell(idealIcon, idealW)+
-				dv+cell(nowIcon, idealW)+dv,
+			"  "+
+				nameStyle.Width(nameW).Render(a.name)+
+				lipgloss.NewStyle().Width(idealW).Render(idealIcon)+
+				lipgloss.NewStyle().Width(idealW).Render(nowIcon),
 		)
+	}
+
+	tableRows := []string{headerRow, divider}
+	for _, r := range actRows {
+		tableRows = append(tableRows, r, divider)
 	}
 
 	// ── Overall ──
 	overallLine := StyleResultKey.Render("Overall") + renderGradeBig(br.OverallGrade)
-
-	tableRows := []string{topBorder, headerRow, midBorder}
-	for i, r := range actRows {
-		tableRows = append(tableRows, r)
-		if i < len(actRows)-1 {
-			tableRows = append(tableRows, midBorder)
-		}
-	}
-	tableRows = append(tableRows, botBorder)
 
 	rows := []string{gradeSec, "", gradeBig, ""}
 	rows = append(rows, descLines...)
