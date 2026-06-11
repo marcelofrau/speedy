@@ -472,14 +472,19 @@ func activityStatus(overallRank, minRank int) string {
 }
 
 func (m Model) renderResultsBlock() string {
-	// Column width: split available width in two, minus gap and outer margin
-	colW := (m.width - 4 - 2 - 4) / 2 // 4 outer margin, 2 border, 4 gap
-	if colW < 30 {
-		colW = 30
+	avail := m.width - 10 // subtract outer margin + gap
+	if avail < 60 {
+		avail = 60
+	}
+	leftW := avail * 70 / 100
+	rightW := avail - leftW - 2 // -2 for the gap between cols
+	if rightW < 28 {
+		rightW = 28
+		leftW = avail - rightW - 2
 	}
 
-	left := m.renderSpeedCol(colW)
-	right := m.renderBloatSummaryCol(colW)
+	left := m.renderSpeedCol(leftW)
+	right := m.renderBloatSummaryCol(rightW)
 
 	cols := lipgloss.JoinHorizontal(lipgloss.Top, left, "  ", right)
 	return cols + "\n\n  " + StyleHint.Render("Press q to quit.")
@@ -500,20 +505,40 @@ func (m Model) renderSpeedCol(w int) string {
 		return StyleResultKey.Render(k) + vs.Render(v)
 	}
 
+	// ── SPEED TEST section ──
 	speedSec := sec("SPEED TEST")
 	pingRow := row("Ping", fmt.Sprintf("%.0f ms", r.PingMs), StyleSpeedPing) +
 		"  " + StyleResultKey.Render("Jitter") + StyleSpeedPing.Render(fmt.Sprintf("%.0f ms", r.JitterMs))
-	dlRow := StyleSectionDown.Render("↓") + "  " +
+
+	// DL / UL side-by-side inside a sub-panel
+	subW := (innerW - 3) / 2 // -3 for separator and spacing
+	dlSubContent := StyleSectionDown.Render("↓  DOWNLOAD") + "\n\n" +
 		StyleSpeedDown.Render(fmt.Sprintf("%.1f", r.DownloadMbps)) + " " + StyleUnit.Render("Mbps")
-	ulRow := StyleSectionUp.Render("↑") + "  " +
+	ulSubContent := StyleSectionUp.Render("↑  UPLOAD") + "\n\n" +
 		StyleSpeedUp.Render(fmt.Sprintf("%.1f", r.UploadMbps)) + " " + StyleUnit.Render("Mbps")
 
+	dlBox := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color(colorNeonBlue)).
+		Padding(0, 1).
+		Width(subW).
+		Render(dlSubContent)
+	ulBox := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color(colorNeonGreen)).
+		Padding(0, 1).
+		Width(subW).
+		Render(ulSubContent)
+	speedBoxes := lipgloss.JoinHorizontal(lipgloss.Top, dlBox, " ", ulBox)
+
+	// ── CONNECTION section ──
 	connSec := sec("CONNECTION")
 	serverRow := row("Server", r.ServerName+", "+r.Country, StyleResultVal)
 	sponsorRow := row("Sponsor", r.Sponsor, StyleResultVal)
 	ipRow := row("IP", r.IP, StyleResultVal)
 	ispRow := row("ISP", r.ISP, StyleResultVal)
 
+	// ── LATENCY HISTORY section ──
 	sparkSec := sec("LATENCY HISTORY")
 	sparkW := innerW
 	if sparkW < 8 {
@@ -529,9 +554,8 @@ func (m Model) renderSpeedCol(w int) string {
 
 	content := strings.Join([]string{
 		speedSec, "",
-		pingRow,
-		dlRow,
-		ulRow,
+		pingRow, "",
+		speedBoxes,
 		"",
 		connSec, "",
 		serverRow,
@@ -540,19 +564,31 @@ func (m Model) renderSpeedCol(w int) string {
 		ispRow,
 		"",
 		sparkSec, "",
-		dlSpark,
-		ulSpark,
-		"",
+		dlSpark, "",
+		ulSpark, "",
 		totalRow,
 	}, "\n")
 
 	return StyleResultsColLeft.Width(w).Render(content)
 }
 
+// renderGradeBig renders a large double-bordered grade badge.
+func renderGradeBig(grade string) string {
+	color := bb.GradeColor(grade)
+	return lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("#0d0d1a")).
+		Background(lipgloss.Color(color)).
+		Border(lipgloss.DoubleBorder()).
+		BorderForeground(lipgloss.Color(color)).
+		Padding(0, 2).
+		Render(grade)
+}
+
 // renderBloatSummaryCol renders the right results column: bufferbloat summary.
 func (m Model) renderBloatSummaryCol(w int) string {
 	br := m.bloatResult
-	innerW := w - 6
+	innerW := w - 6 // border (2) + padding (2*2=4)
 
 	sec := func(title string) string {
 		return StyleResultsTitle.Render(title) + "\n" +
@@ -561,9 +597,7 @@ func (m Model) renderBloatSummaryCol(w int) string {
 
 	// ── Grade section ──
 	gradeSec := sec("BUFFERBLOAT GRADE")
-	gradeColor := bb.GradeColor(br.OverallGrade)
-	gradeBadgeLine := "  " + renderGradeBadge(br.OverallGrade) + "  " +
-		lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(gradeColor)).Render(br.OverallGrade)
+	gradeBig := renderGradeBig(br.OverallGrade)
 	desc := gradeDesc(br.OverallGrade)
 	var descLines []string
 	for _, l := range strings.Split(desc, "\n") {
@@ -583,12 +617,12 @@ func (m Model) renderBloatSummaryCol(w int) string {
 			Render(fmt.Sprintf("+%.0f ms", br.ULDegradationMs)) +
 		"  " + StyleDim.Render("["+br.ULGrade+"]")
 
-	// ── Your Connection table ──
+	// ── Your Connection table with borders ──
 	connSec := sec("YOUR CONNECTION")
 
 	type activity struct {
 		name    string
-		minRank int // max grade rank that still works (0=A+…5=F)
+		minRank int
 	}
 	activities := []activity{
 		{"Web Browsing", 4},
@@ -600,48 +634,71 @@ func (m Model) renderBloatSummaryCol(w int) string {
 
 	overallRank := gradeRank[br.OverallGrade]
 
-	// Header — use lipgloss Width for ANSI-aware column padding
-	nameW, idealW, nowW := 20, 7, 7
-	header := "  " +
-		StyleTableHeader.Width(nameW).Render("") +
-		StyleTableHeader.Width(idealW).Render("Ideal") +
-		StyleTableHeader.Width(nowW).Render("Now")
-	dividerRow := StyleDim.Render(strings.Repeat("─", innerW))
+	// Column widths — nameW is dynamic so table fits innerW exactly
+	// table total = nameW + 2 idealW + 3 separators (│) + 2 outer (│) = nameW + 2*idealW + 5
+	idealW := 7
+	nameW := innerW - 2*idealW - 5
+	if nameW < 12 {
+		nameW = 12
+	}
+
+	// border chars
+	h, v := "─", "│"
+	tl, tm, tr := "┌", "┬", "┐"
+	ml, mm, mr := "├", "┼", "┤"
+	bl, bm, br2 := "└", "┴", "┘"
+	dim := func(s string) string { return StyleDim.Render(s) }
+
+	hName := strings.Repeat(h, nameW+2)
+	hIdeal := strings.Repeat(h, idealW+2)
+	hNow := strings.Repeat(h, idealW+2)
+
+	topBorder := dim(tl + hName + tm + hIdeal + tm + hNow + tr)
+	midBorder := dim(ml + hName + mm + hIdeal + mm + hNow + mr)
+	botBorder := dim(bl + hName + bm + hIdeal + bm + hNow + br2)
+
+	cell := func(s string, cw int) string {
+		return " " + lipgloss.NewStyle().Width(cw).Render(s) + " "
+	}
+	dv := dim(v)
+
+	headerRow := dv + cell(StyleTableHeader.Render(""), nameW) +
+		dv + cell(StyleTableHeader.Render("Ideal"), idealW) +
+		dv + cell(StyleTableHeader.Render("Now"), idealW) + dv
 
 	var actRows []string
 	for _, a := range activities {
 		idealIcon := StyleTableOK.Render("✓")
 		nowIcon := activityStatus(overallRank, a.minRank)
 		actRows = append(actRows,
-			"  "+
-				lipgloss.NewStyle().Width(nameW).Render(StyleMuted.Render(a.name))+
-				lipgloss.NewStyle().Width(idealW).Render(idealIcon)+
-				lipgloss.NewStyle().Width(nowW).Render(nowIcon),
+			dv+cell(StyleMuted.Render(a.name), nameW)+
+				dv+cell(idealIcon, idealW)+
+				dv+cell(nowIcon, idealW)+dv,
 		)
 	}
 
 	// ── Overall ──
-	overallLine := StyleResultKey.Render("Overall") + renderGradeBadge(br.OverallGrade)
+	overallLine := StyleResultKey.Render("Overall") + renderGradeBig(br.OverallGrade)
 
-	rows := []string{
-		gradeSec, "",
-		gradeBadgeLine,
+	tableRows := []string{topBorder, headerRow, midBorder}
+	for i, r := range actRows {
+		tableRows = append(tableRows, r)
+		if i < len(actRows)-1 {
+			tableRows = append(tableRows, midBorder)
+		}
 	}
+	tableRows = append(tableRows, botBorder)
+
+	rows := []string{gradeSec, "", gradeBig, ""}
 	rows = append(rows, descLines...)
 	rows = append(rows, "",
 		latSec, "",
-		unloadedRow,
-		dlLatRow,
-		ulLatRow,
+		unloadedRow, dlLatRow, ulLatRow,
 		"",
 		connSec, "",
-		header,
-		dividerRow,
 	)
-	rows = append(rows, actRows...)
-	rows = append(rows, "",
-		overallLine,
-	)
+	rows = append(rows, tableRows...)
+	rows = append(rows, "", overallLine)
 
 	content := strings.Join(rows, "\n")
 	return StyleResultsColRight.Width(w).Render(content)
