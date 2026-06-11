@@ -45,13 +45,11 @@ type MsgPingDone struct {
 }
 
 type MsgDownloadProgress struct {
-	Mbps    float64
-	Percent float64
+	Mbps float64
 }
 
 type MsgUploadProgress struct {
-	Mbps    float64
-	Percent float64
+	Mbps float64
 }
 
 type MsgSpeedDone struct {
@@ -66,8 +64,6 @@ type MsgDone struct {
 type MsgError struct {
 	Err error
 }
-
-const maxSpeedMbps = 1000.0
 
 func serverBaseURL(rawURL string) string {
 	parts := strings.SplitN(rawURL, "/", 4)
@@ -134,11 +130,7 @@ func Run(send func(tea.Msg)) tea.Cmd {
 		var lastLogDLMbps float64
 		client.SetCallbackDownload(func(rate stlib.ByteRate) {
 			mbps := rate.Mbps()
-			pct := mbps / maxSpeedMbps
-			if pct > 1.0 {
-				pct = 1.0
-			}
-			send(MsgDownloadProgress{Mbps: mbps, Percent: pct})
+			send(MsgDownloadProgress{Mbps: mbps})
 			// throttle log: only if >=1s elapsed or >=10% change
 			delta := math.Abs(mbps-lastLogDLMbps) / math.Max(lastLogDLMbps, 1)
 			if time.Since(lastLogDLTime) >= time.Second || delta >= 0.10 {
@@ -151,7 +143,7 @@ func Run(send func(tea.Msg)) tea.Cmd {
 			return MsgError{Err: err}
 		}
 		dlMbps := server.DLSpeed.Mbps()
-		send(MsgDownloadProgress{Mbps: dlMbps, Percent: dlMbps / maxSpeedMbps})
+		send(MsgDownloadProgress{Mbps: dlMbps})
 		log(send, fmt.Sprintf("Download complete: %.1f Mbps", dlMbps), ev.LogSuccess)
 
 		// 5. Upload — same throttle
@@ -160,11 +152,7 @@ func Run(send func(tea.Msg)) tea.Cmd {
 		var lastLogULMbps float64
 		client.SetCallbackUpload(func(rate stlib.ByteRate) {
 			mbps := rate.Mbps()
-			pct := mbps / maxSpeedMbps
-			if pct > 1.0 {
-				pct = 1.0
-			}
-			send(MsgUploadProgress{Mbps: mbps, Percent: pct})
+			send(MsgUploadProgress{Mbps: mbps})
 			delta := math.Abs(mbps-lastLogULMbps) / math.Max(lastLogULMbps, 1)
 			if time.Since(lastLogULTime) >= time.Second || delta >= 0.10 {
 				log(send, fmt.Sprintf("↑  %.1f Mbps", mbps), ev.LogData)
@@ -176,7 +164,7 @@ func Run(send func(tea.Msg)) tea.Cmd {
 			return MsgError{Err: err}
 		}
 		ulMbps := server.ULSpeed.Mbps()
-		send(MsgUploadProgress{Mbps: ulMbps, Percent: ulMbps / maxSpeedMbps})
+		send(MsgUploadProgress{Mbps: ulMbps})
 		log(send, fmt.Sprintf("Upload complete: %.1f Mbps", ulMbps), ev.LogSuccess)
 
 		baseURL := serverBaseURL(server.URL)

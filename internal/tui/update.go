@@ -83,24 +83,32 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case st.MsgDownloadProgress:
 		m.dlMbps = msg.Mbps
-		m.dlPercent = msg.Percent
 		m.dlHistory = appendHistory(m.dlHistory, msg.Mbps, sparklineLen)
+		max, _ := nextSpeedTier(msg.Mbps)
+		if max > m.dlDisplayMax {
+			m.dlDisplayMax = max
+		}
+		m.dlPercent = msg.Mbps / m.dlDisplayMax
+		cmd := m.dlProgress.SetPercent(m.dlPercent)
 		if m.phase != PhaseDownload {
 			m.phase = PhaseDownload
 			m.phaseStartTime = time.Now()
 		}
-		cmd := m.dlProgress.SetPercent(msg.Percent)
 		return m, cmd
 
 	case st.MsgUploadProgress:
 		m.ulMbps = msg.Mbps
-		m.ulPercent = msg.Percent
 		m.ulHistory = appendHistory(m.ulHistory, msg.Mbps, sparklineLen)
+		max, _ := nextSpeedTier(msg.Mbps)
+		if max > m.ulDisplayMax {
+			m.ulDisplayMax = max
+		}
+		m.ulPercent = msg.Mbps / m.ulDisplayMax
+		cmd := m.ulProgress.SetPercent(m.ulPercent)
 		if m.phase != PhaseUpload {
 			m.phase = PhaseUpload
 			m.phaseStartTime = time.Now()
 		}
-		cmd := m.ulProgress.SetPercent(msg.Percent)
 		return m, cmd
 
 	case st.MsgSpeedDone:

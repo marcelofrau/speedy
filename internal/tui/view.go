@@ -266,14 +266,16 @@ func (m Model) renderDownloadPanel(pw int) string {
 
 	var speed, arcBar, gauge, spark string
 	if m.dlMbps > 0 || active || done {
-		speed = renderSpeedLine(m.dlMbps, StyleSpeedDown)
-		arcBar = renderArc(m.dlPercent, aw, colorNeonBlue, colorMuted)
+		_, label := nextSpeedTier(m.dlDisplayMax)
+		speed = StyleSpeedDown.Render(fmtMbps(m.dlMbps))
+		arcBar = renderArc(m.dlPercent, aw, colorNeonBlue, colorMuted, label)
 		m.dlProgress.Width = aw
 		gauge = m.dlProgress.View()
 		spark = renderSparklineMultiRow(m.dlHistory, aw, sparkRows, colorNeonBlue)
 	} else {
-		speed = StylePlaceholder.Render("— Mbps")
-		arcBar = renderArcEmpty(aw, colorMuted)
+		_, label := nextSpeedTier(m.dlDisplayMax)
+		speed = StylePlaceholder.Render("—")
+		arcBar = renderArcEmpty(aw, colorMuted, label)
 		gauge = renderEmptyBar(aw)
 		spark = renderSparklineMultiRowEmpty(aw, sparkRows)
 	}
@@ -295,14 +297,16 @@ func (m Model) renderUploadPanel(pw int) string {
 
 	var speed, arcBar, gauge, spark string
 	if m.ulMbps > 0 || active || done {
-		speed = renderSpeedLine(m.ulMbps, StyleSpeedUp)
-		arcBar = renderArc(m.ulPercent, aw, colorNeonGreen, colorMuted)
+		_, label := nextSpeedTier(m.ulDisplayMax)
+		speed = StyleSpeedUp.Render(fmtMbps(m.ulMbps))
+		arcBar = renderArc(m.ulPercent, aw, colorNeonGreen, colorMuted, label)
 		m.ulProgress.Width = aw
 		gauge = m.ulProgress.View()
 		spark = renderSparklineMultiRow(m.ulHistory, aw, sparkRows, colorNeonGreen)
 	} else {
-		speed = StylePlaceholder.Render("— Mbps")
-		arcBar = renderArcEmpty(aw, colorMuted)
+		_, label := nextSpeedTier(m.ulDisplayMax)
+		speed = StylePlaceholder.Render("—")
+		arcBar = renderArcEmpty(aw, colorMuted, label)
 		gauge = renderEmptyBar(aw)
 		spark = renderSparklineMultiRowEmpty(aw, sparkRows)
 	}
@@ -529,9 +533,9 @@ func (m Model) renderSpeedCol(w int) string {
 	// DL / UL side-by-side inside a sub-panel
 	subW := (innerW - 3) / 2 // -3 for separator and spacing
 	dlSubContent := StyleSectionDown.Render("↓  DOWNLOAD") + "\n\n" +
-		StyleSpeedDown.Render(fmt.Sprintf("%.1f", r.DownloadMbps)) + " " + StyleUnit.Render("Mbps")
+		StyleSpeedDown.Render(fmtMbps(r.DownloadMbps))
 	ulSubContent := StyleSectionUp.Render("↑  UPLOAD") + "\n\n" +
-		StyleSpeedUp.Render(fmt.Sprintf("%.1f", r.UploadMbps)) + " " + StyleUnit.Render("Mbps")
+		StyleSpeedUp.Render(fmtMbps(r.UploadMbps))
 
 	dlBox := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
@@ -727,13 +731,12 @@ func (m Model) renderError() string {
 // This creates a proper bar-chart effect with `rows` lines of height.
 
 func renderSparklineMultiRow(history []float64, width, rows int, fillColor string) string {
-	data := padOrTrim(history, width)
-	maxVal := maxSlice(data)
+	maxVal := maxSlice(history)
 	if maxVal == 0 {
 		maxVal = 1
 	}
-	normalized := make([]float64, len(data))
-	for i, v := range data {
+	normalized := make([]float64, len(history))
+	for i, v := range history {
 		normalized[i] = v / maxVal
 	}
 	return buildMultiRowSpark(normalized, width, rows,
@@ -741,13 +744,12 @@ func renderSparklineMultiRow(history []float64, width, rows int, fillColor strin
 }
 
 func renderLatencySparklineMultiRow(history []float64, width, rows int, fillColor string) string {
-	data := padOrTrim(history, width)
-	maxVal := maxSlice(data)
+	maxVal := maxSlice(history)
 	if maxVal == 0 {
 		maxVal = 1
 	}
-	normalized := make([]float64, len(data))
-	for i, v := range data {
+	normalized := make([]float64, len(history))
+	for i, v := range history {
 		normalized[i] = v / maxVal
 	}
 	return buildMultiRowSpark(normalized, width, rows,
@@ -807,11 +809,18 @@ func buildMultiRowSpark(normalized []float64, width, rows int, fillColor, fillDi
 
 // ── Drawing helpers ───────────────────────────────────────────────────────────
 
-func renderSpeedLine(mbps float64, style lipgloss.Style) string {
-	return style.Render(fmt.Sprintf("%.1f", mbps)) + " " + StyleUnit.Render("Mbps")
+func fmtMbps(mbps float64) string {
+	if mbps >= 1000 {
+		val := mbps / 1000
+		s := fmt.Sprintf("%.2f", val)
+		s = strings.TrimRight(s, "0")
+		s = strings.TrimRight(s, ".")
+		return s + " Gbps"
+	}
+	return fmt.Sprintf("%.1f Mbps", mbps)
 }
 
-func renderArc(percent float64, width int, fillColor, emptyColor string) string {
+func renderArc(percent float64, width int, fillColor, emptyColor, maxLabel string) string {
 	if percent < 0 {
 		percent = 0
 	}
@@ -824,34 +833,30 @@ func renderArc(percent float64, width int, fillColor, emptyColor string) string 
 	fillStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(fillColor))
 	emptyStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(emptyColor))
 
-	// Two rows: top row slightly dimmer for depth
-	topFilled := int(math.Round(float64(filled) * 0.85)) // slightly shorter top
-	bar1 := fillStyle.Render(strings.Repeat("█", topFilled)) +
-		emptyStyle.Render(strings.Repeat("░", width-topFilled))
-	bar2 := fillStyle.Render(strings.Repeat("█", filled)) +
+	bar := fillStyle.Render(strings.Repeat("█", filled)) +
 		emptyStyle.Render(strings.Repeat("░", empty))
 
-	labelPad := width - 1 - len("1000 Mbps")
+	labelPad := width - 1 - len(maxLabel)
 	if labelPad < 1 {
 		labelPad = 1
 	}
 	labels := emptyStyle.Render("0") +
 		strings.Repeat(" ", labelPad) +
-		emptyStyle.Render("1000 Mbps")
+		emptyStyle.Render(maxLabel)
 
-	return bar1 + "\n" + bar2 + "\n" + labels
+	return bar + "\n" + bar + "\n" + labels
 }
 
-func renderArcEmpty(width int, emptyColor string) string {
+func renderArcEmpty(width int, emptyColor, maxLabel string) string {
 	emptyStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(emptyColor))
 	bar := emptyStyle.Render(strings.Repeat("░", width))
-	labelPad := width - 1 - len("1000 Mbps")
+	labelPad := width - 1 - len(maxLabel)
 	if labelPad < 1 {
 		labelPad = 1
 	}
 	labels := emptyStyle.Render("0") +
 		strings.Repeat(" ", labelPad) +
-		emptyStyle.Render("1000 Mbps")
+		emptyStyle.Render(maxLabel)
 	return bar + "\n" + bar + "\n" + labels
 }
 
@@ -874,17 +879,6 @@ func renderGradeBadge(grade string) string {
 		Background(lipgloss.Color(color)).
 		Padding(0, 1).
 		Render(grade)
-}
-
-func padOrTrim(data []float64, width int) []float64 {
-	if len(data) < width {
-		padded := make([]float64, width-len(data))
-		return append(padded, data...)
-	}
-	if len(data) > width {
-		return data[len(data)-width:]
-	}
-	return data
 }
 
 func clampIdx(idx, max int) int {

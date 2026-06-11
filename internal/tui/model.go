@@ -67,14 +67,16 @@ type Model struct {
 	jitterMs float64
 
 	// live download
-	dlMbps    float64
-	dlPercent float64
-	dlHistory []float64
+	dlMbps       float64
+	dlPercent    float64
+	dlDisplayMax float64
+	dlHistory    []float64
 
 	// live upload
-	ulMbps    float64
-	ulPercent float64
-	ulHistory []float64
+	ulMbps       float64
+	ulPercent    float64
+	ulDisplayMax float64
+	ulHistory    []float64
 
 	// speed test final result
 	speedResult st.Result
@@ -127,6 +129,8 @@ func NewModel() Model {
 		spinner:        sp,
 		dlProgress:     dlProg,
 		ulProgress:     ulProg,
+		dlDisplayMax:   500,
+		ulDisplayMax:   500,
 		dlHistory:      make([]float64, 0, sparklineLen),
 		ulHistory:      make([]float64, 0, sparklineLen),
 		bloatDLHistory: make([]float64, 0, bloatLen),
@@ -185,4 +189,32 @@ func (m Model) computePanelWidth() int {
 		pw = 30
 	}
 	return pw
+}
+
+// speedTier represents a display scale tier for the speedometer.
+type speedTier struct {
+	maxMbps float64
+	label   string
+}
+
+var speedTiers = []speedTier{
+	{100, "100 Mbps"},
+	{200, "200 Mbps"},
+	{500, "500 Mbps"},
+	{1000, "1 Gbps"},
+	{2500, "2.5 Gbps"},
+	{5000, "5 Gbps"},
+	{10000, "10 Gbps"},
+}
+
+// nextSpeedTier returns the display max and human-readable label for a given Mbps.
+// The first tier where mbps < tier * 0.85 is selected, so the bar has headroom.
+func nextSpeedTier(mbps float64) (float64, string) {
+	for _, t := range speedTiers {
+		if mbps < t.maxMbps*0.85 {
+			return t.maxMbps, t.label
+		}
+	}
+	last := speedTiers[len(speedTiers)-1]
+	return last.maxMbps, last.label
 }
