@@ -16,7 +16,7 @@
 
 `speedy` is a terminal speedtest TUI with live gauges, arc speedometers, and sparkline graphs — powered by the [Speedtest.net](https://speedtest.net) network.
 
-[![asciicast](https://asciinema.org/a/ryAW6qIXjBHr5SI9.svg)](https://asciinema.org/a/ryAW6qIXjBHr5SI9)
+![demo](demo.gif)
 
 ## Features
 
