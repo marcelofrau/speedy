@@ -515,14 +515,14 @@ func (m Model) renderSpeedCol(w int) string {
 	ispRow := row("ISP", r.ISP, StyleResultVal)
 
 	sparkSec := sec("LATENCY HISTORY")
-	sparkW := innerW - 10
+	sparkW := innerW
 	if sparkW < 8 {
 		sparkW = 8
 	}
-	dlSpark := StyleMuted.Render("dl load  ") +
-		renderLatencySparklineMultiRow(m.bloatDLHistory, sparkW, 2, bb.GradeColor(br.DLGrade))
-	ulSpark := StyleMuted.Render("ul load  ") +
-		renderLatencySparklineMultiRow(m.bloatULHistory, sparkW, 2, bb.GradeColor(br.ULGrade))
+	dlSpark := StyleMuted.Render("dl load") + "\n" +
+		renderLatencySparklineMultiRow(m.bloatDLHistory, sparkW, 3, bb.GradeColor(br.DLGrade))
+	ulSpark := StyleMuted.Render("ul load") + "\n" +
+		renderLatencySparklineMultiRow(m.bloatULHistory, sparkW, 3, bb.GradeColor(br.ULGrade))
 
 	elapsed := time.Since(m.startTime).Round(time.Second)
 	totalRow := StyleDim.Render("Completed in  ") + StyleResultVal.Render(elapsed.String())
@@ -600,8 +600,12 @@ func (m Model) renderBloatSummaryCol(w int) string {
 
 	overallRank := gradeRank[br.OverallGrade]
 
-	header := StyleTableHeader.Render(fmt.Sprintf("  %-20s  %-6s  %-6s",
-		"", "Ideal", "Now"))
+	// Header — use lipgloss Width for ANSI-aware column padding
+	nameW, idealW, nowW := 20, 7, 7
+	header := "  " +
+		StyleTableHeader.Width(nameW).Render("") +
+		StyleTableHeader.Width(idealW).Render("Ideal") +
+		StyleTableHeader.Width(nowW).Render("Now")
 	dividerRow := StyleDim.Render(strings.Repeat("─", innerW))
 
 	var actRows []string
@@ -609,8 +613,11 @@ func (m Model) renderBloatSummaryCol(w int) string {
 		idealIcon := StyleTableOK.Render("✓")
 		nowIcon := activityStatus(overallRank, a.minRank)
 		actRows = append(actRows,
-			fmt.Sprintf("  %-20s  %-6s  %-6s",
-				StyleMuted.Render(a.name), idealIcon, nowIcon))
+			"  "+
+				lipgloss.NewStyle().Width(nameW).Render(StyleMuted.Render(a.name))+
+				lipgloss.NewStyle().Width(idealW).Render(idealIcon)+
+				lipgloss.NewStyle().Width(nowW).Render(nowIcon),
+		)
 	}
 
 	// ── Overall ──
