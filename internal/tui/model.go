@@ -208,10 +208,10 @@ var speedTiers = []speedTier{
 }
 
 // nextSpeedTier returns the display max and human-readable label for a given Mbps.
-// The first tier where mbps < tier * 0.85 is selected, so the bar has headroom.
+// Selects the smallest tier that can contain the speed, so the bar fills naturally.
 func nextSpeedTier(mbps float64) (float64, string) {
 	for _, t := range speedTiers {
-		if mbps < t.maxMbps*0.85 {
+		if mbps <= t.maxMbps {
 			return t.maxMbps, t.label
 		}
 	}
