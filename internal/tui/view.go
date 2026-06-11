@@ -40,7 +40,7 @@ func (m Model) View() string {
 
 // renderMainArea renders the 4 metric panels + activity log.
 // Wide terminals (≥wideThreshold): log goes to the right of the stacked panels
-// with a 70/30 split (panels get 70%, log gets 30%).
+// with an 80/20 split (panels get 80%, log gets 20%).
 // Narrow terminals (<wideThreshold): just the 4 panels; log is omitted (stepper
 // and status bar already provide live feedback).
 func (m Model) renderMainArea() string {
@@ -53,9 +53,9 @@ func (m Model) renderMainArea() string {
 		return leftCol
 	}
 
-	// Wide: split available space 70/30 between panels and log
+	// Wide: split available space — panels get 80%, log gets 20%
 	avail := m.width - 4 // reserve 4 chars for the inter-column gap
-	panelsTotal := avail * 70 / 100
+	panelsTotal := avail * 80 / 100
 	logW := avail - panelsTotal
 
 	if logW < logMinWidth {
@@ -255,10 +255,6 @@ func (m Model) renderSpeedRow(pw int) string {
 
 func (m Model) renderDownloadPanel(pw int) string {
 	aw := pw - 6 // inner width = panelWidth - border(2) - padding(4)
-	sw := aw
-	if sw > sparklineLen {
-		sw = sparklineLen
-	}
 	active := m.phase == PhaseDownload
 	done := phaseIn(m.phase, steps[2].done)
 	style := StylePanel
@@ -274,12 +270,12 @@ func (m Model) renderDownloadPanel(pw int) string {
 		arcBar = renderArc(m.dlPercent, aw, colorNeonBlue, colorMuted)
 		m.dlProgress.Width = aw
 		gauge = m.dlProgress.View()
-		spark = renderSparklineMultiRow(m.dlHistory, sw, sparkRows, colorNeonBlue)
+		spark = renderSparklineMultiRow(m.dlHistory, aw, sparkRows, colorNeonBlue)
 	} else {
 		speed = StylePlaceholder.Render("— Mbps")
 		arcBar = renderArcEmpty(aw, colorMuted)
 		gauge = renderEmptyBar(aw)
-		spark = renderSparklineMultiRowEmpty(sw, sparkRows)
+		spark = renderSparklineMultiRowEmpty(aw, sparkRows)
 	}
 
 	content := strings.Join([]string{heading, "", arcBar, speed, "", gauge, "", spark}, "\n")
@@ -288,10 +284,6 @@ func (m Model) renderDownloadPanel(pw int) string {
 
 func (m Model) renderUploadPanel(pw int) string {
 	aw := pw - 6
-	sw := aw
-	if sw > sparklineLen {
-		sw = sparklineLen
-	}
 	active := m.phase == PhaseUpload
 	done := phaseIn(m.phase, steps[3].done)
 	style := StylePanel
@@ -307,12 +299,12 @@ func (m Model) renderUploadPanel(pw int) string {
 		arcBar = renderArc(m.ulPercent, aw, colorNeonGreen, colorMuted)
 		m.ulProgress.Width = aw
 		gauge = m.ulProgress.View()
-		spark = renderSparklineMultiRow(m.ulHistory, sw, sparkRows, colorNeonGreen)
+		spark = renderSparklineMultiRow(m.ulHistory, aw, sparkRows, colorNeonGreen)
 	} else {
 		speed = StylePlaceholder.Render("— Mbps")
 		arcBar = renderArcEmpty(aw, colorMuted)
 		gauge = renderEmptyBar(aw)
-		spark = renderSparklineMultiRowEmpty(sw, sparkRows)
+		spark = renderSparklineMultiRowEmpty(aw, sparkRows)
 	}
 
 	content := strings.Join([]string{heading, "", arcBar, speed, "", gauge, "", spark}, "\n")
@@ -698,9 +690,6 @@ func (m Model) renderBloatSummaryCol(w int) string {
 		tableRows = append(tableRows, r, divider)
 	}
 
-	// ── Overall ──
-	overallLine := StyleResultKey.Render("Overall") + renderGradeBig(br.OverallGrade)
-
 	rows := []string{gradeSec, "", gradeBig, ""}
 	rows = append(rows, descLines...)
 	rows = append(rows, "",
@@ -710,7 +699,6 @@ func (m Model) renderBloatSummaryCol(w int) string {
 		connSec, "",
 	)
 	rows = append(rows, tableRows...)
-	rows = append(rows, "", overallLine)
 
 	content := strings.Join(rows, "\n")
 	return StyleResultsColRight.Width(w).Render(content)
