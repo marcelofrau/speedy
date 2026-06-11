@@ -29,7 +29,7 @@ const (
 )
 
 const (
-	version        = "v0.1.0"
+	version        = "v0.9"
 	sparklineLen   = 60
 	bloatLen       = 50
 	panelWidth     = 38

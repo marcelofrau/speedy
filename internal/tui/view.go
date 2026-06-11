@@ -93,11 +93,7 @@ func (m Model) renderMainArea() string {
 func (m Model) renderHeader() string {
 	title := StyleTitle.Render("⚡ speedy")
 	ver := StyleVersion.Render(version)
-	gap := m.width - lipgloss.Width(title) - lipgloss.Width(ver) - 6
-	if gap < 1 {
-		gap = 1
-	}
-	line := title + strings.Repeat(" ", gap) + ver
+	line := title + "  " + ver
 	return StyleHeader.Width(m.width - 4).Render(line)
 }
 

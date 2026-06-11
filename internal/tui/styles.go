@@ -37,7 +37,7 @@ var (
 			Foreground(lipgloss.Color(colorNeonCyan))
 
 	StyleVersion = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(colorMuted))
+			Foreground(lipgloss.Color(colorNeonCyan))
 
 	StyleHeader = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
