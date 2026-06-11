@@ -39,26 +39,41 @@ func (m Model) View() string {
 }
 
 // renderMainArea renders the 4 metric panels + activity log.
-// Wide terminals (≥wideThreshold): log goes to the right of the stacked panels.
+// Wide terminals (≥wideThreshold): log goes to the right of the stacked panels
+// with a 70/30 split (panels get 70%, log gets 30%).
 // Narrow terminals (<wideThreshold): just the 4 panels; log is omitted (stepper
 // and status bar already provide live feedback).
 func (m Model) renderMainArea() string {
-	leftCol := lipgloss.JoinVertical(lipgloss.Left,
-		m.renderSpeedRow(),
-		"\n",
-		m.renderBloatRow(),
-	)
-
 	if m.width < wideThreshold {
+		leftCol := lipgloss.JoinVertical(lipgloss.Left,
+			m.renderSpeedRow(panelWidth),
+			"\n",
+			m.renderBloatRow(panelWidth),
+		)
 		return leftCol
 	}
 
-	// Calculate log width from remaining space
-	leftW := lipgloss.Width(leftCol)
-	logW := m.width - leftW - 4 - 4 // 4 gap + 4 outer margin
+	// Wide: split available space 70/30 between panels and log
+	avail := m.width - 4 // reserve 4 chars for the inter-column gap
+	panelsTotal := avail * 70 / 100
+	logW := avail - panelsTotal
+
 	if logW < logMinWidth {
-		return leftCol
+		logW = logMinWidth
+		panelsTotal = avail - logW
 	}
+
+	// Two panels per row with "  " gap → each panel width = (panelsTotal - 2) / 2
+	pw := (panelsTotal - 2) / 2
+	if pw < 30 {
+		pw = 30
+	}
+
+	leftCol := lipgloss.JoinVertical(lipgloss.Left,
+		m.renderSpeedRow(pw),
+		"\n",
+		m.renderBloatRow(pw),
+	)
 
 	logH := lipgloss.Height(leftCol)
 	logPanel := m.renderLogPanelSized(logW, logH)
@@ -230,15 +245,16 @@ func (m Model) renderInfoBlock() string {
 
 // ── Speed panels ──────────────────────────────────────────────────────────────
 
-func (m Model) renderSpeedRow() string {
+func (m Model) renderSpeedRow(pw int) string {
 	return lipgloss.JoinHorizontal(lipgloss.Top,
-		m.renderDownloadPanel(),
+		m.renderDownloadPanel(pw),
 		"  ",
-		m.renderUploadPanel(),
+		m.renderUploadPanel(pw),
 	)
 }
 
-func (m Model) renderDownloadPanel() string {
+func (m Model) renderDownloadPanel(pw int) string {
+	aw := pw - 6 // inner width = panelWidth - border(2) - padding(4)
 	active := m.phase == PhaseDownload
 	done := phaseIn(m.phase, steps[2].done)
 	style := StylePanel
@@ -251,21 +267,23 @@ func (m Model) renderDownloadPanel() string {
 	var speed, arcBar, gauge, spark string
 	if m.dlMbps > 0 || active || done {
 		speed = renderSpeedLine(m.dlMbps, StyleSpeedDown)
-		arcBar = renderArc(m.dlPercent, arcWidth, colorNeonBlue, colorMuted)
+		arcBar = renderArc(m.dlPercent, aw, colorNeonBlue, colorMuted)
+		m.dlProgress.Width = aw
 		gauge = m.dlProgress.View()
-		spark = renderSparklineMultiRow(m.dlHistory, arcWidth, sparkRows, colorNeonBlue)
+		spark = renderSparklineMultiRow(m.dlHistory, aw, sparkRows, colorNeonBlue)
 	} else {
 		speed = StylePlaceholder.Render("— Mbps")
-		arcBar = renderArcEmpty(arcWidth, colorMuted)
-		gauge = renderEmptyBar(arcWidth)
-		spark = renderSparklineMultiRowEmpty(arcWidth, sparkRows)
+		arcBar = renderArcEmpty(aw, colorMuted)
+		gauge = renderEmptyBar(aw)
+		spark = renderSparklineMultiRowEmpty(aw, sparkRows)
 	}
 
 	content := strings.Join([]string{heading, "", arcBar, speed, "", gauge, "", spark}, "\n")
-	return style.Width(panelWidth).Render(content)
+	return style.Width(pw).Render(content)
 }
 
-func (m Model) renderUploadPanel() string {
+func (m Model) renderUploadPanel(pw int) string {
+	aw := pw - 6
 	active := m.phase == PhaseUpload
 	done := phaseIn(m.phase, steps[3].done)
 	style := StylePanel
@@ -278,31 +296,33 @@ func (m Model) renderUploadPanel() string {
 	var speed, arcBar, gauge, spark string
 	if m.ulMbps > 0 || active || done {
 		speed = renderSpeedLine(m.ulMbps, StyleSpeedUp)
-		arcBar = renderArc(m.ulPercent, arcWidth, colorNeonGreen, colorMuted)
+		arcBar = renderArc(m.ulPercent, aw, colorNeonGreen, colorMuted)
+		m.ulProgress.Width = aw
 		gauge = m.ulProgress.View()
-		spark = renderSparklineMultiRow(m.ulHistory, arcWidth, sparkRows, colorNeonGreen)
+		spark = renderSparklineMultiRow(m.ulHistory, aw, sparkRows, colorNeonGreen)
 	} else {
 		speed = StylePlaceholder.Render("— Mbps")
-		arcBar = renderArcEmpty(arcWidth, colorMuted)
-		gauge = renderEmptyBar(arcWidth)
-		spark = renderSparklineMultiRowEmpty(arcWidth, sparkRows)
+		arcBar = renderArcEmpty(aw, colorMuted)
+		gauge = renderEmptyBar(aw)
+		spark = renderSparklineMultiRowEmpty(aw, sparkRows)
 	}
 
 	content := strings.Join([]string{heading, "", arcBar, speed, "", gauge, "", spark}, "\n")
-	return style.Width(panelWidth).Render(content)
+	return style.Width(pw).Render(content)
 }
 
 // ── Bufferbloat panels ────────────────────────────────────────────────────────
 
-func (m Model) renderBloatRow() string {
+func (m Model) renderBloatRow(pw int) string {
 	return lipgloss.JoinHorizontal(lipgloss.Top,
-		m.renderBloatDownloadPanel(),
+		m.renderBloatDownloadPanel(pw),
 		"  ",
-		m.renderBloatUploadPanel(),
+		m.renderBloatUploadPanel(pw),
 	)
 }
 
-func (m Model) renderBloatDownloadPanel() string {
+func (m Model) renderBloatDownloadPanel(pw int) string {
+	aw := pw - 6
 	active := m.phase == PhaseBloatDownload
 	style := StylePanel
 	if active {
@@ -321,9 +341,9 @@ func (m Model) renderBloatDownloadPanel() string {
 	if len(m.bloatDLHistory) > 0 {
 		last := m.bloatDLHistory[len(m.bloatDLHistory)-1]
 		currentLine = "Under load  " + renderLatencyValue(last, m.bloatBaselineMs)
-		spark = renderLatencySparklineMultiRow(m.bloatDLHistory, arcWidth, sparkRows, colorNeonBlue)
+		spark = renderLatencySparklineMultiRow(m.bloatDLHistory, aw, sparkRows, colorNeonBlue)
 	} else {
-		spark = renderSparklineMultiRowEmpty(arcWidth, sparkRows)
+		spark = renderSparklineMultiRowEmpty(aw, sparkRows)
 	}
 
 	// Grade on its own line to avoid heading overflow
@@ -335,10 +355,11 @@ func (m Model) renderBloatDownloadPanel() string {
 	rows = append(rows, spark)
 
 	content := strings.Join(rows, "\n")
-	return style.Width(panelWidth).Render(content)
+	return style.Width(pw).Render(content)
 }
 
-func (m Model) renderBloatUploadPanel() string {
+func (m Model) renderBloatUploadPanel(pw int) string {
+	aw := pw - 6
 	active := m.phase == PhaseBloatUpload
 	style := StylePanel
 	if active {
@@ -357,9 +378,9 @@ func (m Model) renderBloatUploadPanel() string {
 	if len(m.bloatULHistory) > 0 {
 		last := m.bloatULHistory[len(m.bloatULHistory)-1]
 		currentLine = "Under load  " + renderLatencyValue(last, m.bloatBaselineMs)
-		spark = renderLatencySparklineMultiRow(m.bloatULHistory, arcWidth, sparkRows, colorNeonGreen)
+		spark = renderLatencySparklineMultiRow(m.bloatULHistory, aw, sparkRows, colorNeonGreen)
 	} else {
-		spark = renderSparklineMultiRowEmpty(arcWidth, sparkRows)
+		spark = renderSparklineMultiRowEmpty(aw, sparkRows)
 	}
 
 	rows := []string{heading, "", baselineLine, currentLine, ""}
@@ -370,7 +391,7 @@ func (m Model) renderBloatUploadPanel() string {
 	rows = append(rows, spark)
 
 	content := strings.Join(rows, "\n")
-	return style.Width(panelWidth).Render(content)
+	return style.Width(pw).Render(content)
 }
 
 // ── Activity Log panel ────────────────────────────────────────────────────────
@@ -472,19 +493,14 @@ func activityStatus(overallRank, minRank int) string {
 }
 
 func (m Model) renderResultsBlock() string {
-	avail := m.width - 10 // subtract outer margin + gap
-	if avail < 60 {
-		avail = 60
-	}
-	leftW := avail * 70 / 100
-	rightW := avail - leftW - 2 // -2 for the gap between cols
-	if rightW < 28 {
-		rightW = 28
-		leftW = avail - rightW - 2
+	// Column width: split available width in two, minus gap and outer margin
+	colW := (m.width - 4 - 2 - 4) / 2 // 4 outer margin, 2 border, 4 gap
+	if colW < 30 {
+		colW = 30
 	}
 
-	left := m.renderSpeedCol(leftW)
-	right := m.renderBloatSummaryCol(rightW)
+	left := m.renderSpeedCol(colW)
+	right := m.renderBloatSummaryCol(colW)
 
 	cols := lipgloss.JoinHorizontal(lipgloss.Top, left, "  ", right)
 	return cols + "\n\n  " + StyleHint.Render("Press q to quit.")

@@ -171,11 +171,18 @@ func appendLog(log []ev.MsgLog, entry ev.MsgLog, startTime time.Time, cap int) [
 	return log
 }
 
-// progressWidth returns the width to use for the progress bar component.
-func progressWidth(panelW int) int {
-	w := panelW - 4
-	if w < 10 {
-		return 10
+// computePanelWidth returns the per-panel width for the live testing screen.
+// On wide terminals it uses a 70/30 panels/log split; on narrow it falls back
+// to the static panelWidth constant.
+func (m Model) computePanelWidth() int {
+	if m.width < wideThreshold {
+		return panelWidth
 	}
-	return w
+	avail := m.width - 4
+	panelsTotal := avail * 70 / 100
+	pw := (panelsTotal - 2) / 2
+	if pw < 30 {
+		pw = 30
+	}
+	return pw
 }

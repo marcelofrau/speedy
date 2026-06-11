@@ -18,7 +18,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		w := progressWidth(panelWidth)
+		pw := m.computePanelWidth()
+		w := pw - 6
+		if w < 10 {
+			w = 10
+		}
 		m.dlProgress.Width = w
 		m.ulProgress.Width = w
 		return m, nil
