@@ -16,27 +16,7 @@
 
 `speedy` is a terminal speedtest TUI with live gauges, arc speedometers, and sparkline graphs — powered by the [Speedtest.net](https://speedtest.net) network.
 
-```
-╭──────────────────────────────────────────────────────────╮
-│  ⚡ speedy                                      v0.1.0   │
-╰──────────────────────────────────────────────────────────╯
-
-  Server  •  São Paulo, BR  (Claro)
-  IP      •  177.82.x.x  •  Vivo Fibra
-  Ping    •  12 ms  •  Jitter  2 ms
-
-╭──────────────────────────╮  ╭──────────────────────────╮
-│  ↓  DOWNLOAD             │  │  ↑  UPLOAD               │
-│                          │  │                          │
-│  ████████████░░░░░░░░░░  │  │  ██████░░░░░░░░░░░░░░░░  │
-│  0                1000   │  │  0                1000   │
-│  342.1 Mbps              │  │  180.5 Mbps              │
-│                          │  │                          │
-│  ████████████████░░░░░   │  │  ██████████░░░░░░░░░░░   │
-│                          │  │                          │
-│  ▁▂▃▄▅▆▇█▇▆▅▇██▇█▇█     │  │  ▁▁▂▃▄▅▆▇██▇▆▅▄▃▂        │
-╰──────────────────────────╯  ╰──────────────────────────╯
-```
+[![asciicast](https://asciinema.org/a/ryAW6qIXjBHr5SI9.svg)](https://asciinema.org/a/ryAW6qIXjBHr5SI9)
 
 ## Features
 
