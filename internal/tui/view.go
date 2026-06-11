@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/admpub/go-figure"
+	_ "github.com/admpub/go-figure/fonts/smslant"
 	"github.com/charmbracelet/lipgloss"
 	bb "github.com/marcelofrau/speedy/internal/bufferbloat"
 	ev "github.com/marcelofrau/speedy/internal/event"
@@ -76,6 +78,11 @@ func (m Model) renderMainArea() string {
 	)
 
 	logH := lipgloss.Height(leftCol)
+	// Use full terminal height minus overhead so the log shows more entries
+	availH := m.height - 20
+	if availH > logH {
+		logH = availH
+	}
 	logPanel := m.renderLogPanelSized(logW, logH)
 
 	return lipgloss.JoinHorizontal(lipgloss.Top, leftCol, "    ", logPanel)
@@ -569,8 +576,7 @@ func (m Model) renderSpeedCol(w int) string {
 	ulSpark := StyleMuted.Render("ul load") + "\n" +
 		renderLatencySparklineMultiRow(m.bloatULHistory, sparkW, 3, bb.GradeColor(br.ULGrade))
 
-	elapsed := time.Since(m.startTime).Round(time.Second)
-	totalRow := StyleDim.Render("Completed in  ") + StyleResultVal.Render(elapsed.String())
+	totalRow := StyleDim.Render("Completed in  ") + StyleResultVal.Render(m.finalElapsed.String())
 
 	content := strings.Join([]string{
 		speedSec, "",
@@ -605,6 +611,48 @@ func renderGradeBig(grade string) string {
 		Render(grade)
 }
 
+// renderGradeFiglet renders the grade as a large FIGlet banner using smslant.
+func renderGradeFiglet(grade string) string {
+	color := bb.GradeColor(grade)
+	fig := figure.NewFigure(grade, "smslant", true)
+	style := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(color))
+	var sb strings.Builder
+	for _, line := range fig.Slicify() {
+		sb.WriteString(style.Render(line) + "\n")
+	}
+	return strings.TrimRight(sb.String(), "\n")
+}
+
+// noLoadStatus returns ✓/⚠/✗ for an activity based on real ping/speed data (Opção B).
+func noLoadStatus(name string, pingMs, dlMbps, ulMbps float64) string {
+	var ok, warn bool
+	switch name {
+	case "Web Browsing":
+		ok = pingMs < 150
+		warn = pingMs < 180
+	case "Audio Calls":
+		ok = pingMs < 100
+		warn = pingMs < 120
+	case "4K Streaming":
+		ok = dlMbps >= 25
+		warn = dlMbps >= 15
+	case "Video Conf.":
+		ok = dlMbps >= 5 && pingMs < 80
+		warn = dlMbps >= 3 && pingMs < 100
+	case "Low-lat. Gaming":
+		ok = pingMs < 40
+		warn = pingMs < 55
+	}
+	switch {
+	case ok:
+		return StyleTableOK.Render("✓")
+	case warn:
+		return StyleTableWarn.Render("⚠")
+	default:
+		return StyleTableFail.Render("✗")
+	}
+}
+
 // renderBloatSummaryCol renders the right results column: bufferbloat summary.
 func (m Model) renderBloatSummaryCol(w int) string {
 	br := m.bloatResult
@@ -617,7 +665,7 @@ func (m Model) renderBloatSummaryCol(w int) string {
 
 	// ── Grade section ──
 	gradeSec := sec("BUFFERBLOAT GRADE")
-	gradeBig := renderGradeBig(br.OverallGrade)
+	gradeBig := renderGradeFiglet(br.OverallGrade)
 	desc := gradeDesc(br.OverallGrade)
 	var descLines []string
 	for _, l := range strings.Split(desc, "\n") {
@@ -655,7 +703,7 @@ func (m Model) renderBloatSummaryCol(w int) string {
 	overallRank := gradeRank[br.OverallGrade]
 
 	// Column widths — no borders, just ANSI-aware padding
-	idealW := 7
+	idealW := 10
 	nameW := innerW - 2*idealW
 	if nameW < 12 {
 		nameW = 12
@@ -666,8 +714,8 @@ func (m Model) renderBloatSummaryCol(w int) string {
 	// Header row
 	headerRow := "  " +
 		StyleTableHeader.Width(nameW).Render("") +
-		StyleTableHeader.Width(idealW).Render("Ideal") +
-		StyleTableHeader.Width(idealW).Render("Now")
+		StyleTableHeader.Width(idealW).Render("No Load") +
+		StyleTableHeader.Width(idealW).Render("With Load")
 
 	// Odd/even styles
 	styleEven := StyleMuted
@@ -675,7 +723,7 @@ func (m Model) renderBloatSummaryCol(w int) string {
 
 	var actRows []string
 	for i, a := range activities {
-		idealIcon := StyleTableOK.Render("✓")
+		idealIcon := noLoadStatus(a.name, br.BaselineMs, m.speedResult.DownloadMbps, m.speedResult.UploadMbps)
 		nowIcon := activityStatus(overallRank, a.minRank)
 		nameStyle := styleEven
 		if i%2 == 1 {

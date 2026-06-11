@@ -87,6 +87,9 @@ type Model struct {
 	bloatULHistory  []float64
 	bloatResult     bb.Result
 
+	// final elapsed time (frozen when PhaseWaitKey is reached)
+	finalElapsed time.Duration
+
 	// activity log
 	log []ev.MsgLog
 

@@ -143,6 +143,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case bb.MsgBloatDone:
 		m.bloatResult = msg.Result
+		m.finalElapsed = time.Since(m.startTime).Round(time.Second)
 		m.phase = PhaseWaitKey // pause for keypress before showing results
 		m.phaseStartTime = time.Now()
 		return m, nil
