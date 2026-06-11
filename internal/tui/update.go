@@ -27,6 +27,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "q", "Q", "ctrl+c":
 			return m, tea.Quit
+		default:
+			// Any key other than quit advances from the wait screen to results
+			if m.phase == PhaseWaitKey {
+				m.phase = PhaseDone
+				return m, nil
+			}
 		}
 
 	case spinner.TickMsg:
@@ -125,7 +131,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case bb.MsgBloatDone:
 		m.bloatResult = msg.Result
-		m.phase = PhaseDone
+		m.phase = PhaseWaitKey // pause for keypress before showing results
 		m.phaseStartTime = time.Now()
 		return m, nil
 

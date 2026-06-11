@@ -197,6 +197,11 @@ var (
 			Bold(true).
 			Foreground(lipgloss.Color(colorNeonOrange))
 
+	// Wait-for-keypress screen
+	StyleWaitKey = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color(colorNeonPink))
+
 	// Error
 	StyleError = lipgloss.NewStyle().
 			Bold(true).

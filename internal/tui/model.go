@@ -23,6 +23,7 @@ const (
 	PhaseBloatBaseline
 	PhaseBloatDownload
 	PhaseBloatUpload
+	PhaseWaitKey // tests complete, waiting for keypress before showing results
 	PhaseDone
 	PhaseError
 )
@@ -33,7 +34,10 @@ const (
 	bloatLen       = 50
 	panelWidth     = 38
 	arcWidth       = 34
-	logVisibleRows = 12 // visible lines in the activity log panel
+	sparkRows      = 4  // height in terminal lines of each multi-row sparkline
+	logVisibleRows = 12 // fallback visible lines when log is rendered below panels
+	logMinWidth    = 28 // minimum log panel width before hiding it
+	wideThreshold  = 110 // min terminal width to show log on the right
 )
 
 // globalSend is set from main.go via SetSend() before p.Run().
